@@ -1,3 +1,4 @@
-FROM bioconductor/bioconductor_docker:RELEASE_X_Y
+FROM bioconductor/bioconductor_docker:RELEASE_3_15
 
-RUN R -e 'BiocManager::install(c("msdata", "mzR", "lgatto/rpx", "RforMassSpectrometry/ProtGenerics", "RforMassSpectrometry/MsCoreUtils", "RforMassSpectrometry/QFeatures", "RforMassSpectrometry/PSM", "RforMassSpectrometry/Spectra", "RforMassSpectrometry/SpectraVis")'
+RUN R -e 'BiocManager::install(c("lgatto/msmbstyle", "rmarkdown", "bookdown", "BiocStyle", "mzR", "Spectra", "QFeatures", "rpx", "msdata", "rhdf5", "PSMatch", "pheatmap")'
+RUN git clone https://github.com/rformassspectrometry/docs
