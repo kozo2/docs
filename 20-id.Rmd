@@ -35,12 +35,16 @@ basename(idf)
 
 The easiest way to read identification data in `mzIdentML` (often
 abbreviated with `mzid`) into R is to read it with `readPSMs()`
-function from the [`PSM`](https://rformassspectrometry.github.io/PSM/)
-package. The function will parse the file and return a `DataFrame`.
+function from the
+[`PSMatch`](https://rformassspectrometry.github.io/PSMatch/)
+package[^oldname]. The function will parse the file and return a
+`DataFrame`.
+
+[^oldname]: Previously named `PSM`.
 
 ```{r readid, message = FALSE}
-library(PSM)
-id <- readPSMs(idf)
+library(PSMatch)
+id <- PSM(idf)
 dim(id)
 names(id)
 ```
@@ -92,7 +96,7 @@ Below, we can see how scan 1774 has 4 matches, all to sequence
 
 ```{r}
 i <- which(id$spectrumID == "controllerType=0 controllerNumber=1 scan=1774")
-id[i, 1:5]
+data.frame(id[i, ])[1:5]
 ```
 
 If the goal is to keep all the matches, but arranged by scan/spectrum,
@@ -173,8 +177,8 @@ id_tbl
 
 `r msmbstyle::question_begin()`
 
-- Remove non-proteotypic peptides. Start by identifying scans that
-  match different proteins. For example scan 4884 matches proteins
+- Remove shared peptides. Start by identifying scans that match
+  different proteins. For example scan 4884 matches proteins
   `XXX_ECA3406` and `ECA3415`. Scan 4099 match `XXX_ECA4416_1`,
   `XXX_ECA4416_2` and `XXX_ECA4416_3`. Then remove the scans that
   match any of these proteins.
@@ -203,11 +207,37 @@ id_tbl
 
 Which leaves us with `r nrow(id_tbl)` PSMs.
 
-This can also be achieved with the `filterPSMs()` function:
+This can also be achieved with the `filterPSMs()` function, or the
+individual `filterPsmRank()`, `filterPsmDecoy` and `filterPsmShared()`
+functions:
 
 ```{r}
 id_filtered <- filterPSMs(id)
 ```
+
+The `describePeptides()` and `describeProteins()` functions from the
+`PSMatch` package provide useful summaries of preptides and proteins
+in a PSM search result.
+
+
+- `describePeptides()` gives the number of unique and shared peptides
+  and for the latter, the size of their protein groups:
+
+```{r}
+describePeptides(id_filtered)
+```
+
+- `describeProteins()` gives the number of protein defined by only
+  unique, only shared, or a mixture of unique/shared peptides:
+
+```{r}
+describeProteins(id_filtered)
+```
+
+See [Understanding protein groups with adjacency
+matrices](https://rformassspectrometry.github.io/PSMatch/articles/AdjacencyMatrix.html)
+`PSMatch` vignette provides additional tools to explore how proteins
+were inferred from peptides.
 
 `r msmbstyle::question_begin()`
 
@@ -258,8 +288,10 @@ ggplot(iddf, aes(x = n, y = DBseqLength)) + geom_point()
 
 `r msmbstyle::solution_end()`
 
+
+
 If you would like to learn more about how the mzid data are handled by
-`PSM` via the `r BiocStyle::Biocpkg("mzR")` and `r BiocStyle::Biocpkg("mzID")`
+`PSMatch` via the `r BiocStyle::Biocpkg("mzR")` and `r BiocStyle::Biocpkg("mzID")`
 packages, check out the \@ref(sec-id2) section in the annexe.
 
 
@@ -370,6 +402,51 @@ summary(sp_2$precursorMz - sp_2$experimentalMassToCharge)
 ```
 `r msmbstyle::solution_end()`
 
+
+## An identification-annotated chromatogram
+
+Now that we have combined raw data and their associated
+peptide-spectrum matches, we can produced an improved total ion
+chromatogram, identifying MS1 scans that lead to successful
+identifications.
+
+The `countIdentifications()` function is going to tally the number of
+identifications (i.e non-missing characters in the `sequence` spectra
+variable) for each scan. In the case of MS2 scans, these will be
+either 1 or 0, depending the presence of a sequence. For MS1 scans,
+the function will count the number of sequences for the descendant MS2
+scans, i.e. those produced from precursor ions from each MS1 scan.
+
+
+```{r nSequence, cache = TRUE}
+sp <- countIdentifications(sp)
+```
+
+Below, we see on the second line that 3457 MS2 scans lead to no PSM,
+while 2546 lead to an identifcation. Among all MS1 scans, 833 lead to
+no MS2 scans with PSMs. 30 MS1 scans generated one MS2 scan that lead
+to a PSM, 45 lead to two PSMs, ...
+
+```{r nSequenceRes}
+table(msLevel(sp), sp$countIdentifications)
+```
+
+These data can also be visualised on the total ion chromatogram:
+
+```{r nSequencePlot, fig.fullwidth = TRUE, fig.width = 8, fig.height = 4}
+sp |>
+filterMsLevel(1) |>
+spectraData() |>
+as_tibble() |>
+ggplot(aes(x = rtime,
+           y = totIonCurrent)) +
+    geom_line(alpha = 0.25) +
+    geom_point(aes(colour = ifelse(countIdentifications == 0,
+                                   NA, countIdentifications)),
+               size = 0.75,
+               alpha = 0.5) +
+    labs(colour = "Number of ids")
+```
 
 ## Visualising peptide-spectrum matches
 
@@ -552,7 +629,7 @@ filterMsLevel(sp, 1) %>%
 
 ```{r, message = FALSE, fig.width = 12}
 ## Identification data
-library("PSM")
+library("PSMatch")
 id <- PSM(mzids)
 
 ## Number of PSMs per acquisition
@@ -650,10 +727,46 @@ plotSpectraMirror(sp_O43175[2], sp_O43175[10])
 `r msmbstyle::solution_end()`
 
 
+`r msmbstyle::question_begin()`
+
+Generate total ion chromatograms for each acquisition and annotate the
+MS1 scans with the number of PSMs using the `countIdentifications()`
+function, as shown above. The function will automatically perform the
+counts in parallel for each acquisition.
+
+`r msmbstyle::question_end()`
+
+
+`r msmbstyle::solution_begin()`
+
+```{r}
+sp <- countIdentifications(sp)
+table(msLevel(sp), sp$countIdentifications)
+```
+
+```{r}
+sp |>
+ filterMsLevel(1) |>
+ spectraData() |>
+ as_tibble() |>
+ ggplot(aes(x = rtime,
+            y = totIonCurrent)) +
+     geom_line(alpha = 0.25) +
+     geom_point(aes(colour = ifelse(countIdentifications == 0,
+                                    NA, countIdentifications)),
+                size = 0.75,
+                alpha = 0.5) +
+     scale_colour_gradient(low = "orange", high = "red") +
+     facet_grid(sub("^.+_", "", basename(dataOrigin)) ~ .) +
+     labs(colour = "Number of ids")
+```
+
+`r msmbstyle::solution_end()`
+
 ## Exploration and Assessment of Identifications using `MSnID`
 
 ```{r, echo = FALSE}
-unloadNamespace("PSM")
+unloadNamespace("PSMatch")
 ```
 
 The `MSnID` package extracts MS/MS ID data from mzIdentML (leveraging
@@ -689,7 +802,7 @@ We start by loading the package, initialising the `MSnID` object, and
 add the identification result from our `mzid` file (there could of
 course be more that one).
 
-```{r msnid1}
+```{r msnid1, warning = FALSE}
 library("MSnID")
 msnid <- MSnID(".")
 msnid <- read_mzIDs(msnid, mzids)

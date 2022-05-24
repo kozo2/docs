@@ -6,7 +6,7 @@ fig:unnamed-chunk-5
 fig:unnamed-chunk-6
 fig:unnamed-chunk-7
 fig:unnamed-chunk-8
-fig:unnamed-chunk-26
+fig:unnamed-chunk-22
 fig:answid1
 fig:sc
 fig:itraq
@@ -44,6 +44,7 @@ identification-data.frame
 keeping-all-matches
 filtering-data
 adding-identification-data-to-raw-data
+an-identification-annotated-chromatogram
 visualising-peptide-spectrum-matches
 comparing-spectra
 summary-exercice
